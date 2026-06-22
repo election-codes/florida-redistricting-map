@@ -12,6 +12,13 @@
       height: 100vh;
       width: 100%;
     }
+
+    .label {
+      font-size: 11px;
+      font-weight: bold;
+      color: #111;
+      text-shadow: 0 0 2px white;
+    }
   </style>
 </head>
 
@@ -20,48 +27,87 @@
 <div id="map"></div>
 
 <script>
+
+// -------------------- MAP INIT --------------------
 const map = L.map('map').setView([27.8, -81.7], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-  layer.bindTooltip(
-  `FL-${f.properties.DISTRICT}`,
-  {
-    permanent: true,
-    direction: 'center',
-    className: 'district-label'
-  }
-);
-  
+// -------------------- COLOR SCALE --------------------
+function getColor(demPct, repPct) {
+  const margin = demPct - repPct;
+
+  if (margin >= 0.30) return '#08306b'; // strong D
+  if (margin >= 0.15) return '#2171b5';
+  if (margin >= 0.05) return '#6baed6';
+  if (margin > -0.05) return '#cccccc'; // tossup
+  if (margin > -0.15) return '#fc9272';
+  if (margin > -0.30) return '#ef3b2c';
+  return '#99000d'; // strong R
+}
+
+// -------------------- LOAD DATA --------------------
 fetch('fl_2024_by_2026_district.geojson')
   .then(res => res.json())
   .then(data => {
 
     function style(f) {
-      let d = f.properties.G24PREDHAR_sum || 0;
-      let r = f.properties.G24PRERTRU_sum || 0;
-      let t = f.properties.total_2024_sum || 1;
-
-      let demPct = d / t;
+      const dem = f.properties["Dem %"] || 0;
+      const rep = f.properties["Rep %"] || 0;
 
       return {
-        fillColor: demPct > 0.5 ? '#2b6cb0' : '#c53030',
+        fillColor: getColor(dem, rep),
         weight: 1,
         color: 'white',
-        fillOpacity: 0.7
+        fillOpacity: 0.75
       };
     }
 
     function onEachFeature(f, layer) {
 
-      let d = f.properties.G24PREDHAR_sum || 0;
-      let r = f.properties.G24PRERTRU_sum || 0;
-      let t = f.properties.total_2024_sum || 1;
+      const dem = (f.properties["Dem %"] || 0) * 100;
+      const rep = (f.properties["Rep %"] || 0) * 100;
 
-      let demPct = (d / t * 100).toFixed(1);
-      let repPct = (r / t * 100).toFixed(1);
+      const margin = dem > rep
+        ? `D+${(dem - rep).toFixed(1)}%`
+        : `R+${(rep - dem).toFixed(1)}%`;
+
+      const district = f.properties.DISTRICT;
+
+      // Tooltip (hover)
+      layer.bindTooltip(
+        `FL-${district}<br>${margin}`,
+        { sticky: true, direction: 'center', className: 'label' }
+      );
+
+      // Popup (click)
+      layer.bindPopup(
+        `<b>FL-${district}</b><br><br>
+        Democratic: ${dem.toFixed(1)}%<br>
+        Republican: ${rep.toFixed(1)}%<br>
+        <b>Margin: ${margin}</b>`
+      );
+    }
+
+    const geo = L.geoJSON(data, {
+      style,
+      onEachFeature
+    }).addTo(map);
+
+    // Auto-zoom to Florida layer
+    map.fitBounds(geo.getBounds());
+
+  })
+  .catch(err => {
+    console.error("Failed to load GeoJSON:", err);
+  });
+
+</script>
+
+</body>
+</html>      let repPct = (r / t * 100).toFixed(1);
 
       let margin = d > r
         ? `D+${((d - r) / t * 100).toFixed(1)}%`
