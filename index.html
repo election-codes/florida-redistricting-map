@@ -13,11 +13,15 @@
       width: 100%;
     }
 
-    .label {
+    .district-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
       font-size: 11px;
-      font-weight: bold;
+      font-weight: 700;
       color: #111;
-      text-shadow: 0 0 2px white;
+      text-shadow: 0 0 3px white;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -28,111 +32,82 @@
 
 <script>
 
-// -------------------- MAP INIT --------------------
 const map = L.map('map').setView([27.8, -81.7], 6);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-// -------------------- COLOR SCALE --------------------
+// ---------------- COLOR SCALE ----------------
 function getColor(demPct, repPct) {
-  const margin = demPct - repPct;
+  const m = demPct - repPct;
 
-  if (margin >= 0.30) return '#08306b'; // strong D
-  if (margin >= 0.15) return '#2171b5';
-  if (margin >= 0.05) return '#6baed6';
-  if (margin > -0.05) return '#cccccc'; // tossup
-  if (margin > -0.15) return '#fc9272';
-  if (margin > -0.30) return '#ef3b2c';
-  return '#99000d'; // strong R
+  if (m >= 0.30) return '#08306b';
+  if (m >= 0.15) return '#2171b5';
+  if (m >= 0.05) return '#6baed6';
+  if (m > -0.05) return '#cccccc';
+  if (m > -0.15) return '#fc9272';
+  if (m > -0.30) return '#ef3b2c';
+  return '#99000d';
 }
 
-// -------------------- LOAD DATA --------------------
 fetch('fl_2024_by_2026_district.geojson')
-  .then(res => res.json())
+  .then(r => r.json())
   .then(data => {
 
-    function style(f) {
-      const dem = f.properties["Dem %"] || 0;
-      const rep = f.properties["Rep %"] || 0;
+    const layerGroup = L.geoJSON(data, {
 
-      return {
-        fillColor: getColor(dem, rep),
-        weight: 1,
-        color: 'white',
-        fillOpacity: 0.75
-      };
-    }
+      style: function(f) {
+        const d = f.properties["Dem %"] || 0;
+        const r = f.properties["Rep %"] || 0;
 
-    function onEachFeature(f, layer) {
+        return {
+          fillColor: getColor(d, r),
+          color: 'white',
+          weight: 1,
+          fillOpacity: 0.75
+        };
+      },
 
-      const dem = (f.properties["Dem %"] || 0) * 100;
-      const rep = (f.properties["Rep %"] || 0) * 100;
+      onEachFeature: function(f, layer) {
 
-      const margin = dem > rep
-        ? `D+${(dem - rep).toFixed(1)}%`
-        : `R+${(rep - dem).toFixed(1)}%`;
+        const dem = (f.properties["Dem %"] || 0) * 100;
+        const rep = (f.properties["Rep %"] || 0) * 100;
 
-      const district = f.properties.DISTRICT;
+        const margin = dem > rep
+          ? `D+${(dem - rep).toFixed(1)}%`
+          : `R+${(rep - dem).toFixed(1)}%`;
 
-      // Tooltip (hover)
-      layer.bindTooltip(
-        `FL-${district}<br>${margin}`,
-        { sticky: true, direction: 'center', className: 'label' }
-      );
+        const district = f.properties.DISTRICT;
 
-      // Popup (click)
-      layer.bindPopup(
-        `<b>FL-${district}</b><br><br>
-        Democratic: ${dem.toFixed(1)}%<br>
-        Republican: ${rep.toFixed(1)}%<br>
-        <b>Margin: ${margin}</b>`
-      );
-    }
+        // ---------------- POPUP (FULL INFO) ----------------
+        layer.bindPopup(
+          `<b>FL-${district}</b><br><br>
+          Democratic: ${dem.toFixed(1)}%<br>
+          Republican: ${rep.toFixed(1)}%<br>
+          <b>Margin: ${margin}</b>`
+        );
 
-    const geo = L.geoJSON(data, {
-      style,
-      onEachFeature
+        // ---------------- PERMANENT LABEL (NO HOVER NEEDED) ----------------
+        const center = layer.getBounds().getCenter();
+
+        L.marker(center, {
+          icon: L.divIcon({
+            className: 'district-label',
+            html: `FL-${district}`
+          }),
+          interactive: false
+        }).addTo(map);
+
+      }
+
     }).addTo(map);
 
-    // Auto-zoom to Florida layer
-    map.fitBounds(geo.getBounds());
+    map.fitBounds(layerGroup.getBounds());
 
-  })
-  .catch(err => {
-    console.error("Failed to load GeoJSON:", err);
-  });
-
-</script>
-
-</body>
-</html>      let repPct = (r / t * 100).toFixed(1);
-
-      let margin = d > r
-        ? `D+${((d - r) / t * 100).toFixed(1)}%`
-        : `R+${((r - d) / t * 100).toFixed(1)}%`;
-
-      layer.bindPopup(
-        `<b>District ${f.properties.DISTRICT || "?"}</b><br><br>
-        Dem: ${demPct}%<br>
-        Rep: ${repPct}%<br>
-        Margin: ${margin}`
-      );
-    }
-
-    L.geoJSON(data, {
-      style,
-      onEachFeature
-    }).addTo(map);
-
-  })
-  .catch(err => {
-    console.error("GeoJSON failed to load:", err);
   });
 
 </script>
 
 </body>
 </html>
-
