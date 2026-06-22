@@ -26,6 +26,15 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
+  layer.bindTooltip(
+  `FL-${f.properties.DISTRICT}`,
+  {
+    permanent: true,
+    direction: 'center',
+    className: 'district-label'
+  }
+);
+  
 fetch('fl_2024_by_2026_district.geojson')
   .then(res => res.json())
   .then(data => {
