@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Florida Redistricting Map</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script>
+const map = L.map('map').setView([27.8, -81.7], 6);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+fetch('fl_2024_by_2026_district.geojson')
+  .then(res => res.json())
+  .then(data => {
+
+    function style(f) {
+      let d = f.properties.G24PREDHAR_sum || 0;
+      let r = f.properties.G24PRERTRU_sum || 0;
+      let t = f.properties.total_2024_sum || 1;
+
+      let demPct = d / t;
+
+      return {
+        fillColor: demPct > 0.5 ? '#2b6cb0' : '#c53030',
+        weight: 1,
+        color: 'white',
+        fillOpacity: 0.7
+      };
+    }
+
+    function onEachFeature(f, layer) {
+
+      let d = f.properties.G24PREDHAR_sum || 0;
+      let r = f.properties.G24PRERTRU_sum || 0;
+      let t = f.properties.total_2024_sum || 1;
+
+      let demPct = (d / t * 100).toFixed(1);
+      let repPct = (r / t * 100).toFixed(1);
+
+      let margin = d > r
+        ? `D+${((d - r) / t * 100).toFixed(1)}%`
+        : `R+${((r - d) / t * 100).toFixed(1)}%`;
+
+      layer.bindPopup(
+        `<b>District ${f.properties.DISTRICT || "?"}</b><br><br>
+        Dem: ${demPct}%<br>
+        Rep: ${repPct}%<br>
+        Margin: ${margin}`
+      );
+    }
+
+    L.geoJSON(data, {
+      style,
+      onEachFeature
+    }).addTo(map);
+
+  })
+  .catch(err => {
+    console.error("GeoJSON failed to load:", err);
+  });
+
+</script>
+
+</body>
+</html>
+
