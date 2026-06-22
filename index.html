@@ -23,10 +23,11 @@
       height: 100vh;
       width: 30%;
       float: right;
-      padding: 20px;
+      padding: 16px;
       box-sizing: border-box;
       background: #fafafa;
       border-left: 1px solid #ddd;
+      overflow-y: auto;
     }
 
     .district-label {
@@ -43,11 +44,34 @@
     .title {
       font-size: 18px;
       font-weight: bold;
+      margin-bottom: 8px;
+    }
+
+    .searchbox {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+    }
+
+    .card {
+      background: white;
+      padding: 10px;
+      border: 1px solid #ddd;
       margin-bottom: 10px;
     }
 
-    .muted {
-      color: #666;
+    .legend {
+      background: white;
+      padding: 10px;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      margin-top: 10px;
+    }
+
+    .highlight {
+      stroke: black !important;
+      weight: 3 !important;
     }
   </style>
 </head>
@@ -57,10 +81,26 @@
 <div id="map"></div>
 
 <div id="sidebar">
-  <div class="title">Florida District Dashboard</div>
-  <div class="muted">Click a district to view details</div>
-  <hr>
-  <div id="content">No district selected</div>
+
+  <div class="title">Florida Elections Dashboard</div>
+
+  <input id="search" class="searchbox" placeholder="Search district (e.g. 25)" />
+
+  <div id="content">
+    Click a district to view details
+  </div>
+
+  <div class="legend">
+    <b>Margin Scale</b><br>
+    🔵 Strong D (30+)<br>
+    🔷 Likely D (15–30)<br>
+    🔵 Lean D (5–15)<br>
+    ⚪ Tossup<br>
+    🔴 Lean R (5–15)<br>
+    🟥 Likely R (15–30)<br>
+    🟤 Strong R (30+)
+  </div>
+
 </div>
 
 <script>
@@ -71,7 +111,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-// ---------------- COLOR SCALE ----------------
+let geoLayer;
+let selected = null;
+
+// ---------------- COLOR FUNCTION ----------------
 function getColor(dem, rep) {
   const m = dem - rep;
 
@@ -84,21 +127,31 @@ function getColor(dem, rep) {
   return '#99000d';
 }
 
+// ---------------- SIDEBAR ----------------
 function updateSidebar(f, dem, rep, marginText) {
   document.getElementById("content").innerHTML = `
-    <h2>FL-${f.properties.DISTRICT}</h2>
-    <b>Democratic:</b> ${dem.toFixed(1)}%<br>
-    <b>Republican:</b> ${rep.toFixed(1)}%<br><br>
-    <b>Margin:</b> ${marginText}
+    <div class="card">
+      <h2>FL-${f.properties.DISTRICT}</h2>
+
+      <b>Democratic:</b> ${dem.toFixed(1)}%<br>
+      <b>Republican:</b> ${rep.toFixed(1)}%<br><br>
+
+      <b>Margin:</b> ${marginText}
+    </div>
   `;
 }
 
-// ---------------- LOAD DATA ----------------
+// ---------------- STYLE RESET ----------------
+function resetStyle(layer) {
+  geoLayer.resetStyle(layer);
+}
+
+// ---------------- LOAD MAP ----------------
 fetch('fl_2024_by_2026_district.geojson')
   .then(r => r.json())
   .then(data => {
 
-    const layerGroup = L.geoJSON(data, {
+    geoLayer = L.geoJSON(data, {
 
       style: function(f) {
         const d = (f.properties["Dem %"] || 0) * 100;
@@ -123,7 +176,7 @@ fetch('fl_2024_by_2026_district.geojson')
 
         const district = f.properties.DISTRICT;
 
-        // ---------------- POPUP (FL- INCLUDED) ----------------
+        // popup
         layer.bindPopup(`
           <b>FL-${district}</b><br><br>
           Democratic: ${dem.toFixed(1)}%<br>
@@ -131,12 +184,21 @@ fetch('fl_2024_by_2026_district.geojson')
           <b>Margin: ${marginText}</b>
         `);
 
-        // ---------------- CLICK → SIDEBAR ----------------
+        // click behavior
         layer.on('click', () => {
+
+          if (selected) resetStyle(selected);
+          selected = layer;
+
+          layer.setStyle({
+            weight: 3,
+            color: '#000'
+          });
+
           updateSidebar(f, dem, rep, marginText);
         });
 
-        // ---------------- LABEL (NO FL-) ----------------
+        // permanent label (no FL- prefix)
         const center = layer.getBounds().getCenter();
 
         L.marker(center, {
@@ -151,9 +213,25 @@ fetch('fl_2024_by_2026_district.geojson')
 
     }).addTo(map);
 
-    map.fitBounds(layerGroup.getBounds());
+    map.fitBounds(geoLayer.getBounds());
 
   });
+
+// ---------------- SEARCH ----------------
+document.getElementById("search").addEventListener("input", function(e) {
+  const val = e.target.value.trim();
+
+  if (!geoLayer || val === "") return;
+
+  geoLayer.eachLayer(layer => {
+    const d = layer.feature.properties.DISTRICT;
+
+    if (String(d) === val) {
+      map.fitBounds(layer.getBounds());
+      layer.fire('click');
+    }
+  });
+});
 
 </script>
 
