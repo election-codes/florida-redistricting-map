@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Florida Redistricting Dashboard</title>
+  <title>Florida Redistricting Explorer</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -23,7 +23,7 @@
       height: 100vh;
       width: 30%;
       float: right;
-      padding: 16px;
+      padding: 14px;
       box-sizing: border-box;
       background: #fafafa;
       border-left: 1px solid #ddd;
@@ -36,9 +36,15 @@
       box-shadow: none;
       font-size: 11px;
       font-weight: 700;
-      color: #111;
       text-shadow: 0 0 3px white;
       pointer-events: none;
+    }
+
+    .box {
+      background: white;
+      padding: 10px;
+      border: 1px solid #ddd;
+      margin-bottom: 10px;
     }
 
     .title {
@@ -47,26 +53,24 @@
       margin-bottom: 8px;
     }
 
-    .searchbox {
+    input {
       width: 100%;
       padding: 8px;
       margin-bottom: 10px;
       border: 1px solid #ccc;
     }
 
-    .card {
-      background: white;
-      padding: 10px;
-      border: 1px solid #ddd;
-      margin-bottom: 10px;
+    button {
+      padding: 6px;
+      margin-top: 5px;
+      cursor: pointer;
     }
 
     .legend {
-      background: white;
-      padding: 10px;
       font-size: 12px;
+      padding: 10px;
       border: 1px solid #ddd;
-      margin-top: 10px;
+      background: white;
     }
 
     .highlight {
@@ -82,23 +86,21 @@
 
 <div id="sidebar">
 
-  <div class="title">Florida Elections Dashboard</div>
+  <div class="title">FL Redistricting Explorer</div>
 
-  <input id="search" class="searchbox" placeholder="Search district (e.g. 25)" />
+  <input id="search" placeholder="Search district (e.g. 25)" />
 
-  <div id="content">
-    Click a district to view details
-  </div>
+  <button onclick="resetCompare()">Reset Compare</button>
 
-  <div class="legend">
+  <div id="panel" class="box">Click a district</div>
+
+  <div class="legend box">
     <b>Margin Scale</b><br>
-    🔵 Strong D (30+)<br>
-    🔷 Likely D (15–30)<br>
-    🔵 Lean D (5–15)<br>
-    ⚪ Tossup<br>
-    🔴 Lean R (5–15)<br>
-    🟥 Likely R (15–30)<br>
-    🟤 Strong R (30+)
+    Dark Blue = Strong D<br>
+    Blue = Lean D<br>
+    Gray = Tossup<br>
+    Red = Lean R<br>
+    Dark Red = Strong R
   </div>
 
 </div>
@@ -112,11 +114,12 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let geoLayer;
-let selected = null;
+let selected = [];
+let compareMode = false;
 
-// ---------------- COLOR FUNCTION ----------------
-function getColor(dem, rep) {
-  const m = dem - rep;
+// ---------------- COLOR ----------------
+function getColor(d, r) {
+  const m = d - r;
 
   if (m >= 30) return '#08306b';
   if (m >= 15) return '#2171b5';
@@ -127,33 +130,72 @@ function getColor(dem, rep) {
   return '#99000d';
 }
 
-// ---------------- SIDEBAR ----------------
-function updateSidebar(f, dem, rep, marginText) {
-  document.getElementById("content").innerHTML = `
-    <div class="card">
-      <h2>FL-${f.properties.DISTRICT}</h2>
+// ---------------- PANEL ----------------
+function renderPanel() {
 
-      <b>Democratic:</b> ${dem.toFixed(1)}%<br>
-      <b>Republican:</b> ${rep.toFixed(1)}%<br><br>
+  if (selected.length === 1) {
+    const f = selected[0].feature;
 
-      <b>Margin:</b> ${marginText}
-    </div>
-  `;
+    const d = (f.properties["Dem %"] || 0) * 100;
+    const r = (f.properties["Rep %"] || 0) * 100;
+
+    const margin = d > r
+      ? `D+${(d - r).toFixed(1)}%`
+      : `R+${(r - d).toFixed(1)}%`;
+
+    document.getElementById("panel").innerHTML = `
+      <h2>District ${f.properties.DISTRICT}</h2>
+      Dem: ${d.toFixed(1)}%<br>
+      Rep: ${r.toFixed(1)}%<br>
+      <b>${margin}</b>
+    `;
+  }
+
+  if (selected.length === 2) {
+
+    const a = selected[0].feature;
+    const b = selected[1].feature;
+
+    const da = (a.properties["Dem %"] || 0) * 100;
+    const ra = (a.properties["Rep %"] || 0) * 100;
+
+    const db = (b.properties["Dem %"] || 0) * 100;
+    const rb = (b.properties["Rep %"] || 0) * 100;
+
+    document.getElementById("panel").innerHTML = `
+      <h2>Compare</h2>
+
+      <div class="box">
+        <b>District ${a.properties.DISTRICT}</b><br>
+        D: ${da.toFixed(1)}%<br>
+        R: ${ra.toFixed(1)}%
+      </div>
+
+      <div class="box">
+        <b>District ${b.properties.DISTRICT}</b><br>
+        D: ${db.toFixed(1)}%<br>
+        R: ${rb.toFixed(1)}%
+      </div>
+    `;
+  }
 }
 
-// ---------------- STYLE RESET ----------------
-function resetStyle(layer) {
-  geoLayer.resetStyle(layer);
+// ---------------- RESET ----------------
+function resetCompare() {
+  selected = [];
+  compareMode = false;
+  renderPanel();
+  geoLayer.resetStyle();
 }
 
-// ---------------- LOAD MAP ----------------
+// ---------------- LOAD ----------------
 fetch('fl_2024_by_2026_district.geojson')
   .then(r => r.json())
   .then(data => {
 
     geoLayer = L.geoJSON(data, {
 
-      style: function(f) {
+      style: f => {
         const d = (f.properties["Dem %"] || 0) * 100;
         const r = (f.properties["Rep %"] || 0) * 100;
 
@@ -165,40 +207,11 @@ fetch('fl_2024_by_2026_district.geojson')
         };
       },
 
-      onEachFeature: function(f, layer) {
-
-        const dem = (f.properties["Dem %"] || 0) * 100;
-        const rep = (f.properties["Rep %"] || 0) * 100;
-
-        const marginText = dem > rep
-          ? `D+${(dem - rep).toFixed(1)}%`
-          : `R+${(rep - dem).toFixed(1)}%`;
+      onEachFeature: (f, layer) => {
 
         const district = f.properties.DISTRICT;
 
-        // popup
-        layer.bindPopup(`
-          <b>FL-${district}</b><br><br>
-          Democratic: ${dem.toFixed(1)}%<br>
-          Republican: ${rep.toFixed(1)}%<br>
-          <b>Margin: ${marginText}</b>
-        `);
-
-        // click behavior
-        layer.on('click', () => {
-
-          if (selected) resetStyle(selected);
-          selected = layer;
-
-          layer.setStyle({
-            weight: 3,
-            color: '#000'
-          });
-
-          updateSidebar(f, dem, rep, marginText);
-        });
-
-        // permanent label (no FL- prefix)
+        // LABEL (no FL-)
         const center = layer.getBounds().getCenter();
 
         L.marker(center, {
@@ -209,6 +222,23 @@ fetch('fl_2024_by_2026_district.geojson')
           interactive: false
         }).addTo(map);
 
+        // CLICK LOGIC
+        layer.on('click', () => {
+
+          if (selected.length === 2) selected = [];
+
+          selected.push(layer);
+
+          if (selected.length === 2) compareMode = true;
+
+          renderPanel();
+
+          layer.setStyle({
+            weight: 3,
+            color: '#000'
+          });
+        });
+
       }
 
     }).addTo(map);
@@ -218,19 +248,19 @@ fetch('fl_2024_by_2026_district.geojson')
   });
 
 // ---------------- SEARCH ----------------
-document.getElementById("search").addEventListener("input", function(e) {
+document.getElementById("search").addEventListener("input", e => {
+
   const val = e.target.value.trim();
 
-  if (!geoLayer || val === "") return;
+  if (!geoLayer) return;
 
   geoLayer.eachLayer(layer => {
-    const d = layer.feature.properties.DISTRICT;
-
-    if (String(d) === val) {
+    if (String(layer.feature.properties.DISTRICT) === val) {
       map.fitBounds(layer.getBounds());
       layer.fire('click');
     }
   });
+
 });
 
 </script>
