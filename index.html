@@ -1,83 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Florida Redistricting Explorer</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<title>Florida 2026 Congressional District Explorer</title>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-    }
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
 
-    #map {
-      height: 100vh;
-      width: 70%;
-      float: left;
-    }
-
-    #sidebar {
-      height: 100vh;
-      width: 30%;
-      float: right;
-      padding: 14px;
-      box-sizing: border-box;
-      background: #fafafa;
-      border-left: 1px solid #ddd;
-      overflow-y: auto;
-    }
-
-    .district-label {
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      font-size: 11px;
-      font-weight: 700;
-      text-shadow: 0 0 3px white;
-      pointer-events: none;
-    }
-
-    .box {
-      background: white;
-      padding: 10px;
-      border: 1px solid #ddd;
-      margin-bottom: 10px;
-    }
-
-    .title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-    }
-
-    button {
-      padding: 6px;
-      margin-top: 5px;
-      cursor: pointer;
-    }
-
-    .legend {
-      font-size: 12px;
-      padding: 10px;
-      border: 1px solid #ddd;
-      background: white;
-    }
-
-    .highlight {
-      stroke: black !important;
-      weight: 3 !important;
-    }
-  </style>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 
 <body>
@@ -86,179 +18,54 @@
 
 <div id="sidebar">
 
-  <div class="title">FL Redistricting Explorer</div>
+    <h1>Florida 2026 Congressional District Explorer</h1>
 
-  <input id="search" placeholder="Search district (e.g. 25)" />
+    <div class="box">
+        2024 presidential election results recalculated using Florida's proposed 2026 congressional districts.
+    </div>
 
-  <button onclick="resetCompare()">Reset Compare</button>
+    <input
+        id="search"
+        placeholder="Search FL-25, 25, District 25..."
+    >
 
-  <div id="panel" class="box">Click a district</div>
+    <button id="resetView">
+        Reset Statewide View
+    </button>
 
-  <div class="legend box">
-    <b>Margin Scale</b><br>
-    Dark Blue = Strong D<br>
-    Blue = Lean D<br>
-    Gray = Tossup<br>
-    Red = Lean R<br>
-    Dark Red = Strong R
-  </div>
+    <div id="statewideStats" class="box">
+        Loading statewide statistics...
+    </div>
+
+    <div id="districtPanel" class="box">
+        Click a district.
+    </div>
+
+    <div id="topDems" class="box"></div>
+
+    <div id="topReps" class="box"></div>
+
+    <div class="box">
+        <b>District Ratings</b><br><br>
+
+        Safe D: 20%+<br>
+        Likely D: 10–20%<br>
+        Lean D: 5–10%<br>
+        Tossup: under 5%<br>
+        Lean R: 5–10%<br>
+        Likely R: 10–20%<br>
+        Safe R: 20%+
+    </div>
+
+    <div class="box">
+        <b>Methodology</b><br><br>
+
+        2024 Florida precinct-level presidential election results were aggregated into Florida's proposed 2026 congressional districts using precinct boundaries and district shapefiles.
+    </div>
 
 </div>
 
-<script>
-
-const map = L.map('map').setView([27.8, -81.7], 6);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap'
-}).addTo(map);
-
-let geoLayer;
-let selected = [];
-let compareMode = false;
-
-// ---------------- COLOR ----------------
-function getColor(d, r) {
-  const m = d - r;
-
-  if (m >= 30) return '#08306b';
-  if (m >= 15) return '#2171b5';
-  if (m >= 5) return '#6baed6';
-  if (m > -5) return '#cccccc';
-  if (m > -15) return '#fc9272';
-  if (m > -30) return '#ef3b2c';
-  return '#99000d';
-}
-
-//----------RATING---------------
-  function getRating(dem, rep) {
-
-  const margin = Math.abs(dem - rep);
-
-  if (margin >= 20)
-    return dem > rep ? "Safe D" : "Safe R";
-
-  if (margin >= 10)
-    return dem > rep ? "Likely D" : "Likely R";
-
-  if (margin >= 5)
-    return dem > rep ? "Lean D" : "Lean R";
-
-  return "Tossup";
-}
-// ---------------- PANEL ----------------
-function renderPanel(feature) {
-
-  const dem =
-    (feature.properties["Dem %"] || 0) * 100;
-
-  const rep =
-    (feature.properties["Rep %"] || 0) * 100;
-
-  const votes =
-    feature.properties["total_2024_sum"] || 0;
-
-  const marginText =
-    dem > rep
-      ? `D+${(dem-rep).toFixed(1)}`
-      : `R+${(rep-dem).toFixed(1)}`;
-
-  document.getElementById("panel").innerHTML = `
-    <h2>FL-${feature.properties.DISTRICT}</h2>
-
-    <b>Democratic:</b>
-    ${dem.toFixed(1)}%<br>
-
-    <b>Republican:</b>
-    ${rep.toFixed(1)}%<br><br>
-
-    <b>Margin:</b>
-    ${marginText}<br>
-
-    <b>Rating:</b>
-    ${getRating(dem,rep)}<br>
-
-    <b>Total Votes:</b>
-    ${votes.toLocaleString()}
-  `;
-}
-
-// ---------------- LOAD ----------------
-fetch('fl_2024_by_2026_district.geojson')
-  .then(r => r.json())
-  .then(data => {
-
-    geoLayer = L.geoJSON(data, {
-
-      style: f => {
-        const d = (f.properties["Dem %"] || 0) * 100;
-        const r = (f.properties["Rep %"] || 0) * 100;
-
-        return {
-          fillColor: getColor(d, r),
-          color: 'white',
-          weight: 1,
-          fillOpacity: 0.75
-        };
-      },
-
-      onEachFeature: (f, layer) => {
-
-        const district = f.properties.DISTRICT;
-
-        // LABEL (no FL-)
-        const center = layer.getBounds().getCenter();
-
-        L.marker(center, {
-          icon: L.divIcon({
-            className: 'district-label',
-            html: `${district}`
-          }),
-          interactive: false
-        }).addTo(map);
-
-        // CLICK LOGIC
-        layer.on('click', () => {
-
-          if (selected.length === 2) selected = [];
-
-          selected.push(layer);
-
-          if (selected.length === 2) compareMode = true;
-
-          renderPanel();
-
-          layer.setStyle({
-            weight: 3,
-            color: '#000'
-          });
-        });
-
-      }
-
-    }).addTo(map);
-
-    map.fitBounds(geoLayer.getBounds());
-
-  });
-
-// ---------------- SEARCH ----------------
-document.getElementById("search").addEventListener("input", e => {
-
-  const val = e.target.value.trim();
-
-  if (!geoLayer) return;
-
-  geoLayer.eachLayer(layer => {
-    if (String(layer.feature.properties.DISTRICT) === val) {
-      map.fitBounds(layer.getBounds());
-      layer.fire('click');
-    }
-  });
-
-});
-
-</script>
+<script src="script.js"></script>
 
 </body>
 </html>
