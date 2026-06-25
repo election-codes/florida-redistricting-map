@@ -130,62 +130,57 @@ function getColor(d, r) {
   return '#99000d';
 }
 
-// ---------------- PANEL ----------------
-function renderPanel() {
+//----------RATING---------------
+  function getRating(dem, rep) {
 
-  if (selected.length === 1) {
-    const f = selected[0].feature;
+  const margin = Math.abs(dem - rep);
 
-    const d = (f.properties["Dem %"] || 0) * 100;
-    const r = (f.properties["Rep %"] || 0) * 100;
+  if (margin >= 20)
+    return dem > rep ? "Safe D" : "Safe R";
 
-    const margin = d > r
-      ? `D+${(d - r).toFixed(1)}%`
-      : `R+${(r - d).toFixed(1)}%`;
+  if (margin >= 10)
+    return dem > rep ? "Likely D" : "Likely R";
 
-    document.getElementById("panel").innerHTML = `
-      <h2>District ${f.properties.DISTRICT}</h2>
-      Dem: ${d.toFixed(1)}%<br>
-      Rep: ${r.toFixed(1)}%<br>
-      <b>${margin}</b>
-    `;
-  }
+  if (margin >= 5)
+    return dem > rep ? "Lean D" : "Lean R";
 
-  if (selected.length === 2) {
-
-    const a = selected[0].feature;
-    const b = selected[1].feature;
-
-    const da = (a.properties["Dem %"] || 0) * 100;
-    const ra = (a.properties["Rep %"] || 0) * 100;
-
-    const db = (b.properties["Dem %"] || 0) * 100;
-    const rb = (b.properties["Rep %"] || 0) * 100;
-
-    document.getElementById("panel").innerHTML = `
-      <h2>Compare</h2>
-
-      <div class="box">
-        <b>District ${a.properties.DISTRICT}</b><br>
-        D: ${da.toFixed(1)}%<br>
-        R: ${ra.toFixed(1)}%
-      </div>
-
-      <div class="box">
-        <b>District ${b.properties.DISTRICT}</b><br>
-        D: ${db.toFixed(1)}%<br>
-        R: ${rb.toFixed(1)}%
-      </div>
-    `;
-  }
+  return "Tossup";
 }
+// ---------------- PANEL ----------------
+function renderPanel(feature) {
 
-// ---------------- RESET ----------------
-function resetCompare() {
-  selected = [];
-  compareMode = false;
-  renderPanel();
-  geoLayer.resetStyle();
+  const dem =
+    (feature.properties["Dem %"] || 0) * 100;
+
+  const rep =
+    (feature.properties["Rep %"] || 0) * 100;
+
+  const votes =
+    feature.properties["total_2024_sum"] || 0;
+
+  const marginText =
+    dem > rep
+      ? `D+${(dem-rep).toFixed(1)}`
+      : `R+${(rep-dem).toFixed(1)}`;
+
+  document.getElementById("panel").innerHTML = `
+    <h2>FL-${feature.properties.DISTRICT}</h2>
+
+    <b>Democratic:</b>
+    ${dem.toFixed(1)}%<br>
+
+    <b>Republican:</b>
+    ${rep.toFixed(1)}%<br><br>
+
+    <b>Margin:</b>
+    ${marginText}<br>
+
+    <b>Rating:</b>
+    ${getRating(dem,rep)}<br>
+
+    <b>Total Votes:</b>
+    ${votes.toLocaleString()}
+  `;
 }
 
 // ---------------- LOAD ----------------
